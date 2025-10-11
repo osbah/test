@@ -1,0 +1,186 @@
+<?php
+
+use Drupal\\node\\Entity\\NodeType;
+use Drupal\\field\\Entity\\FieldStorageConfig;
+use Drupal\\field\\Entity\\FieldConfig;
+
+/**
+ * Implements hook_install().
+ */
+function carrental_install() {
+  // Ensure required core modules are enabled (JSON:API, Basic Auth, etc.).
+  $module_installer = \Drupal::service('module_installer');
+  $module_installer->install(['jsonapi', 'basic_auth', 'image', 'datetime', 'text', 'options', 'email']);
+
+  // Create 'Car' content type.
+  if (!NodeType::load('car')) {
+    $car_type = NodeType::create([
+      'type' => 'car',
+      'name' => 'Car',
+      'description' => 'Car available for rental',
+    ]);
+    $car_type->setNewRevision(TRUE);
+    $car_type->save();
+  }
+
+  // Create 'Booking' content type.
+  if (!NodeType::load('booking')) {
+    $booking_type = NodeType::create([
+      'type' => 'booking',
+      'name' => 'Booking',
+      'description' => 'Customer booking for a car',
+    ]);
+    $booking_type->setNewRevision(TRUE);
+    $booking_type->save();
+  }
+
+  // Add fields for Car.
+  _carrental_add_field('node', 'car', 'field_price_per_day', 'decimal', [
+    'precision' => 10,
+    'scale' => 2,
+  ], [
+    'label' => 'Price per day',
+    'required' => TRUE,
+    'settings' => [],
+  ]);
+
+  _carrental_add_field('node', 'car', 'field_seats', 'integer', [], [
+    'label' => 'Seats',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'car', 'field_transmission', 'list_string', [
+    'allowed_values' => [
+      'manual' => 'Manual',
+      'automatic' => 'Automatic',
+    ],
+  ], [
+    'label' => 'Transmission',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'car', 'field_fuel', 'list_string', [
+    'allowed_values' => [
+      'petrol' => 'Petrol',
+      'diesel' => 'Diesel',
+      'electric' => 'Electric',
+      'hybrid' => 'Hybrid',
+    ],
+  ], [
+    'label' => 'Fuel',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'car', 'field_available', 'boolean', [], [
+    'label' => 'Available',
+    'required' => TRUE,
+    'default_value' => [['value' => 1]],
+  ]);
+
+  _carrental_add_field('node', 'car', 'field_image', 'image', [
+    'cardinality' => 1,
+  ], [
+    'label' => 'Main image',
+    'required' => FALSE,
+    'settings' => [
+      'alt_field_required' => FALSE,
+    ],
+  ]);
+
+  _carrental_add_field('node', 'car', 'field_description', 'text_long', [], [
+    'label' => 'Description',
+    'required' => FALSE,
+  ]);
+
+  // Add fields for Booking.
+  _carrental_add_field('node', 'booking', 'field_car', 'entity_reference', [
+    'target_type' => 'node',
+    'cardinality' => 1,
+  ], [
+    'label' => 'Car',
+    'required' => TRUE,
+    'settings' => [
+      'handler' => 'default:node',
+      'handler_settings' => [
+        'target_bundles' => [ 'car' => 'car' ],
+      ],
+    ],
+  ]);
+
+  _carrental_add_field('node', 'booking', 'field_start_date', 'datetime', [
+    'datetime_type' => 'date',
+  ], [
+    'label' => 'Start date',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'booking', 'field_end_date', 'datetime', [
+    'datetime_type' => 'date',
+  ], [
+    'label' => 'End date',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'booking', 'field_customer_name', 'string', [
+    'max_length' => 255,
+  ], [
+    'label' => 'Customer name',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'booking', 'field_email', 'email', [], [
+    'label' => 'Email',
+    'required' => TRUE,
+  ]);
+
+  _carrental_add_field('node', 'booking', 'field_phone', 'string', [
+    'max_length' => 50,
+  ], [
+    'label' => 'Phone',
+    'required' => FALSE,
+  ]);
+
+  _carrental_add_field('node', 'booking', 'field_status', 'list_string', [
+    'allowed_values' => [
+      'pending' => 'Pending',
+      'confirmed' => 'Confirmed',
+      'cancelled' => 'Cancelled',
+    ],
+  ], [
+    'label' => 'Status',
+    'required' => TRUE,
+    'default_value' => [['value' => 'pending']],
+  ]);
+}
+
+/**
+ * Helper to create field storage+instance if missing.
+ */
+function _carrental_add_field(string $entity_type, string $bundle, string $field_name, string $field_type, array $storage_settings = [], array $field_settings = []) : void {
+  if (!FieldStorageConfig::loadByName($entity_type, $field_name)) {
+    $storage = FieldStorageConfig::create([
+      'field_name' => $field_name,
+      'entity_type' => $entity_type,
+      'type' => $field_type,
+      'settings' => $storage_settings,
+      'cardinality' => isset($storage_settings['cardinality']) ? $storage_settings['cardinality'] : 1,
+    ]);
+    $storage->save();
+  }
+
+  if (!FieldConfig::loadByName($entity_type, $bundle, $field_name)) {
+    $config = [
+      'field_name' => $field_name,
+      'entity_type' => $entity_type,
+      'bundle' => $bundle,
+      'label' => $field_settings['label'] ?? $field_name,
+      'required' => $field_settings['required'] ?? FALSE,
+      'settings' => $field_settings['settings'] ?? [],
+    ];
+    if (isset($field_settings['default_value'])) {
+      $config['default_value'] = $field_settings['default_value'];
+    }
+    $field = FieldConfig::create($config);
+    $field->save();
+  }
+}

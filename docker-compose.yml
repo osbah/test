@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE: drupal
+      MYSQL_USER: drupal
+      MYSQL_PASSWORD: drupalpw
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  drupal:
+    image: drupal:10-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      PHP_MEMORY_LIMIT: 512M
+    volumes:
+      - ./drupal/modules/custom:/var/www/html/modules/custom
+      - ./drupal/sites:/var/www/html/sites
+      - drupal-files:/var/www/html/sites/default/files
+
+  adminer:
+    image: adminer:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+
+volumes:
+  db-data:
+  drupal-files:

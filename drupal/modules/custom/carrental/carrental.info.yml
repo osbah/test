@@ -1,0 +1,16 @@
+name: Car Rental
+type: module
+description: Provides Car and Booking content types and enables JSON:API for headless.
+core_version_requirement: ^10 || ^11
+package: Custom
+dependencies:
+  - node
+  - field
+  - text
+  - image
+  - datetime
+  - options
+  - user
+  - jsonapi
+  - basic_auth
+  - email
